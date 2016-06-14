@@ -18,6 +18,7 @@ package org.jboss.as.quickstarts.kitchensink.rest;
 
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -39,8 +40,10 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
+import javax.ws.rs.core.Response.ResponseBuilder;
 
 import org.jboss.as.quickstarts.kitchensink.data.MemberRepository;
+import org.jboss.as.quickstarts.kitchensink.exception.UniqueConstraintException;
 import org.jboss.as.quickstarts.kitchensink.model.Member;
 import org.jboss.as.quickstarts.kitchensink.service.MemberRegistration;
 
@@ -104,11 +107,9 @@ public class MemberResourceRESTService {
         } catch (ConstraintViolationException ce) {
             // Handle bean validation issues
             builder = createViolationResponse(ce.getConstraintViolations());
-        } catch (ValidationException e) {
+        } catch (UniqueConstraintException e) {
             // Handle the unique constrain violation
-            Map<String, String> responseObj = new HashMap<>();
-            responseObj.put("email", "Email taken");
-            builder = Response.status(Response.Status.CONFLICT).entity(responseObj);
+            builder = createUniqueConstraintExceptionResponse(e.getConflictiveParameters());
         } catch (Exception e) {
             // Handle generic exceptions
             Map<String, String> responseObj = new HashMap<>();
@@ -118,22 +119,21 @@ public class MemberResourceRESTService {
 
         return builder.build();
     }
-
+    
     /**
      * <p>
      * Validates the given Member variable and throws validation exceptions based on the type of error. If the error is standard
      * bean validation errors then it will throw a ConstraintValidationException with the set of the constraints violated.
      * </p>
      * <p>
-     * If the error is caused because an existing member with the same email is registered it throws a regular validation
-     * exception so that it can be interpreted separately.
+     * If the error is caused because an existing member with the same email or name is registered it throws a UniqueConstraintException so that it can be interpreted separately.
      * </p>
      *
      * @param member Member to be validated
      * @throws ConstraintViolationException If Bean Validation errors exist
-     * @throws ValidationException If member with the same email already exists
+     * @throws UniqueConstraintException If member with the same email or name already exists
      */
-    private void validateMember(Member member) throws ConstraintViolationException, ValidationException {
+    private void validateMember(Member member) throws ConstraintViolationException, ValidationException, UniqueConstraintException {
         // Create a bean validator and check for issues.
         Set<ConstraintViolation<Member>> violations = validator.validate(member);
 
@@ -141,9 +141,12 @@ public class MemberResourceRESTService {
             throw new ConstraintViolationException(new HashSet<ConstraintViolation<?>>(violations));
         }
 
-        // Check the uniqueness of the email address
-        if (emailAlreadyExists(member.getEmail())) {
-            throw new ValidationException("Unique Email Violation");
+        // Check the uniqueness of the email address and name
+        Set<String> conflictiveParam = checkUniqueContraints(member);
+
+        
+        if(!conflictiveParam.isEmpty()){
+        	throw new UniqueConstraintException("Unique constraint violations were found", conflictiveParam);
         }
     }
 
@@ -165,21 +168,63 @@ public class MemberResourceRESTService {
 
         return Response.status(Response.Status.BAD_REQUEST).entity(responseObj);
     }
+    
+    /**
+     * Creates a JAX-RS "Conflict" response including the warnings to be displayed for each field with "Unique Constraint" validation. 
+     *
+     * @param conflictiveParameters The name of the parameters where a UniqueConstraintException were found.
+     * @return JAX-RS response containing all the warnings to be displayed by the conflictive field
+     */
+    private ResponseBuilder createUniqueConstraintExceptionResponse(Set<String> conflictiveParameters){
+
+        // Handle the unique constrain violation
+    	Map<String, String> responseObj = new HashMap<>();
+        
+    	Iterator<String> it = conflictiveParameters.iterator();
+    	
+    	while(it.hasNext()){
+    		String param = it.next();
+    		responseObj.put(param.toLowerCase(), param + " taken");
+    	}
+
+        return Response.status(Response.Status.CONFLICT).entity(responseObj);
+    }
 
     /**
-     * Checks if a member with the same email address is already registered. This is the only way to easily capture the
-     * "@UniqueConstraint(columnNames = "email")" constraint from the Member class.
+     * Checks if a member with the same email address or name is already registered. This is the only way to easily capture the
+     * "@UniqueConstraint(columnNames = {"email", "name"})" constraint from the Member class.
      *
-     * @param email The email to check
-     * @return True if the email already exists, and false otherwise
+     * @param member The member which data should be checked
+     * @return conflictiveParam The names of the parameters with conflicts
      */
-    public boolean emailAlreadyExists(String email) {
+    private Set<String> checkUniqueContraints(Member member){
+    	 Set<String> conflictiveParam = new HashSet<String>();
+    	 
+        if (parameterAlreadyExists("email", member.getEmail())) {
+        	conflictiveParam.add("Email");
+        }
+        if (parameterAlreadyExists("name", member.getName())) {
+        	conflictiveParam.add("Name");
+        }
+        
+        return conflictiveParam;
+    }
+    
+    /**
+     * Check if the given parameter exists in the database
+     * @param parameter The parameter name to evaluate
+     * @param value The parameter value to compare
+ 	 * @return true If founds a member with the same parameter value registered
+ 	 */
+    private boolean parameterAlreadyExists(String parameter, String value) {
         Member member = null;
         try {
-            member = repository.findByEmail(email);
+            member = repository.findByParam(parameter, value);
         } catch (NoResultException e) {
             // ignore
         }
         return member != null;
     }
+    
+    
 }

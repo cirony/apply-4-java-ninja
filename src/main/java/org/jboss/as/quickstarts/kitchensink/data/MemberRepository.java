@@ -35,15 +35,15 @@ public class MemberRepository {
     public Member findById(Long id) {
         return em.find(Member.class, id);
     }
-
-    public Member findByEmail(String email) {
+    
+    public Member findByParam(String param, String value){
         CriteriaBuilder cb = em.getCriteriaBuilder();
         CriteriaQuery<Member> criteria = cb.createQuery(Member.class);
         Root<Member> member = criteria.from(Member.class);
         // Swap criteria statements if you would like to try out type-safe criteria queries, a new
         // feature in JPA 2.0
         // criteria.select(member).where(cb.equal(member.get(Member_.name), email));
-        criteria.select(member).where(cb.equal(member.get("email"), email));
+        criteria.select(member).where(cb.equal(member.get(param), value));
         return em.createQuery(criteria).getSingleResult();
     }
 
@@ -57,4 +57,6 @@ public class MemberRepository {
         criteria.select(member).orderBy(cb.asc(member.get("name")));
         return em.createQuery(criteria).getResultList();
     }
+
+    
 }

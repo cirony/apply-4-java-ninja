@@ -46,6 +46,12 @@
                 <input type="tel" name="phoneNumber" id="phoneNumber" ng-model="newMember.phoneNumber" pattern="[0-9]{10,12}" placeholder="Your Phone #" required/>
                 <span class="error" ng-show="errors.phoneNumber">{{errors.phoneNumber}}</span>
             </div>
+            <div>
+                <label for="address">Address:</label>
+                <input type="text" name="address" id="address" ng-model="newMember.address" placeholder="Your Address" required/>
+                <span class="error" ng-show="errors.address">{{errors.address}}</span>
+            </div>
+            
 
             <!-- We output a list of success messages (appropriately styled!) for the form. -->
             <ul ng-hide="!successMessages" class="success">
@@ -77,6 +83,7 @@
                 <th>Name</th>
                 <th>Email</th>
                 <th>Phone #</th>
+                <th>Address</th>
                 <th>REST URL</th>
             </tr>
         </thead>
@@ -86,6 +93,7 @@
             <td>{{member.name}}</td>
             <td>{{member.email}}</td>
             <td>{{member.phoneNumber}}</td>
+            <td>{{member.address}}</td>
             <td><a href="rest/members/{{member.id}}">/rest/members/{{member.id}}</a>
             </td>
     </table>
